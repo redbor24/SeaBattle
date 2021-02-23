@@ -1,85 +1,6 @@
-from random import randint
-
-# Размерность доски
-BOARD_SIZE = 10
-
-
-# Возвращает обрамлённую служебными строками переданную строку для вывода её в консоль указанным цветом
-def colorized(s, c):
-    if c == "red":
-        return f"\u001b[38;5;9m{s}\u001b[0m"  # 9 - красный
-    elif c == "dark-green":
-        return f"\u001b[38;5;22m{s}\u001b[0m"  # 22 - тёмно-зелёный
-    elif c == "light-green":
-        return f"\u001b[38;5;46m{s}\u001b[0m"  # 46 - ярко-зелёный
-    elif c == "blue":
-        return f"\u001b[38;5;14m{s}\u001b[0m"  # 14 - голубой
-    else:
-        return f"\u001b[0m{s}\u001b[0m"
-
-
-def alive_deck():
-    return colorized("■", "light-green")
-
-
-def shooted_deck():
-    return colorized("X", "red")
-
-
-def shooted_free_cell():
-    return colorized(chr(183), "blue")
-
-
-def free_cell(debug=False):
-    if debug:
-        return colorized("T", "dark-green")
-    else:
-        return colorized(chr(183), "dark-green")
-
-
-def contour_cell():
-    return colorized(chr(183), "blue")
-
-
-# Exceptions
-class BoardExceptions(Exception):
-    """
-    Базовое исключение для игры
-    """
-    pass
-
-
-class OutOfBoard(BoardExceptions):
-    """
-    Выбрасывается при выходе за пределы игровой доски
-    """
-    def __str__(self):
-        return colorized("Ошибка! Выстрел за пределы доски!", "red")
-        # return "Выстрел за пределы доски!"
-
-
-class BadBoard(BoardExceptions):
-    """
-    Выбрасывается при некорректном размере игровой доски
-    """
-    def __str__(self):
-        return colorized("Ошибка! Задайте правильный размер игровой доски!", "red")
-
-
-class BoardUsed(BoardExceptions):
-    """
-    Выбрасывается при повторном выстреле в клетку
-    """
-    def __str__(self):
-        return colorized("Ошибка! В эту клетку уже стреляли!", "red")
-
-
-class BadShip(BoardExceptions):
-    """
-    Выбрасываается при невозможности размещения корабля
-    """
-    def __str__(self):
-        return colorized("Ошибка! Здесь нельзя расположить этот корабль!", "red")
+# from random import randint
+from common import colorized, cell_state
+from errors import *
 
 
 # Dot
@@ -102,7 +23,7 @@ class Dot:
 
 
 # Ship
-class Ship():
+class Ship:
     def __init__(self, start, size, direction):
         self.start = start  # стартовая точка корабля
         self.size = size  # размер корабля (количество палуб)
@@ -127,7 +48,7 @@ class Ship():
 
 
 # Board
-class Board():
+class Board:
     def __init__(self, is_hide=False, size=0):
         self.size = size
         if size == 0:
@@ -136,7 +57,7 @@ class Board():
         self.shooted_ships = 0  # Количество поражённых кораблей на доске
 
         # Инициализация игрового массива
-        self.field = [[free_cell()] * size for _ in range(size)]
+        self.field = [[cell_state["FREE_CELL"]["value"]] * size for _ in range(size)]
         self.busy = []  # Непустые клетки
         self.ships = []  # Корабли доски
 
@@ -144,22 +65,37 @@ class Board():
     def ship_count(self):
         return len(self.ships)
 
+    def __prep_print(self, s):
+        s = s.replace(cell_state["FREE_CELL"]["value"], colorized(cell_state["FREE_CELL"]["symbol"], cell_state["FREE_CELL"]["color"]))
+        s = s.replace(cell_state["USED_CELL"]["value"], colorized(cell_state["USED_CELL"]["symbol"], cell_state["USED_CELL"]["color"]))
+        s = s.replace(cell_state["ALIVE_DECK"]["value"], colorized(cell_state["ALIVE_DECK"]["symbol"], cell_state["ALIVE_DECK"]["color"]))
+        s = s.replace(cell_state["SHOOTED_DECK"]["value"], colorized(cell_state["SHOOTED_DECK"]["symbol"], cell_state["SHOOTED_DECK"]["color"]))
+        return s
+
     def __str__(self):
         res = " " * 5
         # Номера столбцов
         for i, row in enumerate(self.field):
             res += f" {str(i + 1)}"
+
+        if self.size < 10:
+            res = res + ' '
         res += " \n" + " " * 5
+
         # Разделитель
-        for i, row in enumerate(self.field):
-            res += "--"
-        res += "--"
+        s = ""
+        s = "--" * (len(self.field) + 1)
+        res += s
+
         # Строки игровой доски
         for i, row in enumerate(self.field):
             res += f"\n{str.rjust(str(i + 1), 3)} | " + " ".join(row) + " |"
 
         if self.is_hide:
-            res = res.replace("■", free_cell())
+            res = res.replace(cell_state["ALIVE_DECK"]["value"], cell_state["FREE_CELL"]["value"])
+
+        res = self.__prep_print(res)
+
         return res
 
     def is_out(self, dot):
@@ -181,7 +117,7 @@ class Board():
                     self.busy.append(cur_dot)
                     # Показываем контур, если надо
                     if is_show:
-                        self.field[cur_dot.x][cur_dot.y] = contour_cell()
+                        self.field[cur_dot.x][cur_dot.y] = cell_state["USED_CELL"]["value"]
 
     def add_ship(self, ship):
         #  Проверяем точки корабля на корректность кооординат
@@ -191,7 +127,7 @@ class Board():
         # Точки корабля
         for dot in ship.dots:
             # на игровом поле помечаем как палубу
-            self.field[dot.x][dot.y] = alive_deck()
+            self.field[dot.x][dot.y] = cell_state["ALIVE_DECK"]["value"]
             # и добавляем в список занятых точек
             self.busy.append(dot)
 
@@ -215,7 +151,7 @@ class Board():
         for ship in self.ships:
             if ship.shooted(dot):
                 ship.lives -= 1
-                self.field[dot.x][dot.y] = shooted_deck()
+                self.field[dot.x][dot.y] = cell_state["SHOOTED_DECK"]["value"]
                 # Если у корабля кончились жизни, то
                 if ship.lives == 0:
                     # Увеличиваем счётчик уничтоженных кораблей на доске
@@ -228,7 +164,7 @@ class Board():
                     print("Корапь ранен")
                 return True
 
-        self.field[dot.x][dot.y] = shooted_free_cell()
+        self.field[dot.x][dot.y] = cell_state["USED_CELL"]["value"]
         print("Мазила!")
         return False
 
@@ -236,7 +172,7 @@ class Board():
         self.busy = []
 
 
-class Player():
+class Player:
     def __init__(self, board, enemy):
         self.self_board = board
         self.enemy_board = enemy
@@ -278,21 +214,38 @@ class Human(Player):
 
 
 class Game:
-    def __init__(self, size=0, ship_lens=[]):
+    def __init__(self, size=0, ship_lens=[], hide_enemy_ships=True):
         self.size = size
         self.ship_lens = ship_lens
-        human_board = self.random_board()
-        comp_board = self.random_board()
-        comp_board.is_hide = False  # True
-        self.__koeff = (size * 2 + 10) * 2
+        try:
+            print("Инициализация поля игрока...")
+            human_board = self.random_board()
+            print("Инициализация поля AI...")
+            comp_board = self.random_board()
+            comp_board.is_hide = hide_enemy_ships
+            self.__koeff = (size * 2 + 10) * 2
 
-        self.ai = AI(comp_board, human_board)
-        self.user = Human(human_board, comp_board)
+            self.ai = AI(comp_board, human_board)
+            self.user = Human(human_board, comp_board)
+            self.start()
+        except BoardExceptions as e:
+            print(e)
 
     def random_board(self):
         board = None
+        attempts = 0
         while board is None:
             board = self.random_place()
+            attempts += 1
+            if attempts > 100:
+                break
+            print(".", end="")
+        print("")
+
+        if board is None:
+            raise BadBoard("Ошибка! Не удалось сгенерировать поле. Измените размер и/или количество кораблей "
+                           "и попробуйте снова")
+
         return board
 
     def random_place(self):
@@ -309,6 +262,7 @@ class Game:
                     break
                 except BadShip:
                     pass
+            # print(f"  Корабль: {l}, Попытка: {attempts}")
         board.begin()
         return board
 
@@ -341,13 +295,13 @@ class Game:
         self.__print_line()
         print(str.center("ИГРА", self.__koeff))
         self.__print_line()
-        print(str.center("Вы", 30) + ":: " + str.center("Компьютер", 30))
+        print(str.center("Вы", int(self.__koeff / 2)) + ":: " + str.center("Компьютер", int(self.__koeff / 2)))
 
         human_board_str = str(self.user.self_board).split("\n")
         comp_board_str = str(self.ai.self_board).split("\n")
         res_str = ""
         for i in range(len(human_board_str)):
-            res_str += human_board_str[i] + "   :: " + comp_board_str[i] + "\n"
+            res_str += human_board_str[i] + "   ::" + comp_board_str[i] + "\n"
         print(res_str, end="")
         self.__print_line()
 
